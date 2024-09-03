@@ -34,3 +34,5 @@ https://codeocean.com/capsule/0115983/tree/v1
 https://github.com/jinh0park/pytorch-ssim-3D
 
 https://ieeexplore.ieee.org/document/8540024
+
+https://github.com/OSU-MR/motion-robust-CMR/tree/main
