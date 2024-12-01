@@ -130,10 +130,10 @@ def draw():
     venc = 150
     a_mask = mask==1
     v_mask = mask==2
-    flow_a_gt = np.angle(img_gt)/ np.pi * venc * a_mask
-    flow_v_gt = np.angle(img_gt) / np.pi * venc * v_mask
-    flow_a_no = np.angle(img_noise)/ np.pi * venc * a_mask
-    flow_v_no = np.angle(img_noise) / np.pi * venc * v_mask
+    flow_a_gt = np.angle(img_gt) * a_mask
+    flow_v_gt = np.angle(img_gt)  * v_mask
+    flow_a_no = np.angle(img_noise) * a_mask
+    flow_v_no = np.angle(img_noise)  * v_mask
 
     method_list = ['LLR', 'L+S', 'HAAR']
     color_list = ['blue', 'green', 'purple']
@@ -151,22 +151,33 @@ def draw():
         plt.title('Ground Truth', fontweight='bold')
         ax.text(-0.1, 0.5, "Magnitude", va='center', ha='right', transform=ax.transAxes, fontweight='bold', rotation=90, fontsize=12)
         plt.axis('off')    
+        plt.colorbar()
+
         ax = fig.add_subplot(gs[0, 1])
         plt.imshow(noise_show,cmap='gray',origin='lower',norm=imgnorm)
         plt.title('Noisy Image', fontweight='bold')
         plt.axis('off')
+        plt.colorbar()
         ax = fig.add_subplot(gs[1, 0])
         plt.imshow(gtph_show,cmap='gray',origin='lower',norm=phasenorm)
         ax.text(-0.1, 0.5, "Phase", va='center', ha='right', transform=ax.transAxes, fontweight='bold', rotation=90, fontsize=12)
         plt.axis('off')    
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_ticks([0, np.pi/2, np.pi])
+        cbar.set_ticklabels([0 , f"$\pi$ / {2}" ,f"$\pi$" ])
         ax = fig.add_subplot(gs[1, 1])
         plt.imshow(noiseph_show,cmap='gray',origin='lower',norm=phasenorm) 
         plt.axis('off')
-
+        plt.colorbar()
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_ticks([0, np.pi/2, np.pi])
+        cbar.set_ticklabels([0 , f"$\pi$ / {2}" ,f"$\pi$" ])
         ax2 = fig.add_subplot(gs[2, :2])
-        ax2.plot(np.sum(flow_a_gt, axis=(-1,-2,-3)) / np.sum(a_mask[0]), label='flow_art', color='red')
+        ax2.plot(np.sum(flow_a_gt, axis=(-1,-2,-3)) / np.sum(a_mask[0]), label='Ground Truth', color='red')
+        ax2.set_title('Artery Phase', fontweight='bold')
         ax3 = fig.add_subplot(gs[3, :2])
-        ax3.plot(np.sum(flow_v_gt, axis=(-1,-2,-3)) / np.sum(v_mask[0]), label='flow_vein', color='red')
+        ax3.plot(np.sum(flow_v_gt, axis=(-1,-2,-3)) / np.sum(v_mask[0]), label='Ground Truth', color='red')
+        ax3.set_title('Vein Phase', fontweight='bold')
         ax3.legend()
 
         for i, X in enumerate([llrdata['X'], lsdata['X'], haardata['X']]):
@@ -192,19 +203,20 @@ def draw():
                 ax.text(-0.1, 0.5, "Phase Difference", va='center', ha='right', transform=ax.transAxes, fontweight='bold', rotation=90, fontsize=12)
             plt.axis('off')
 
-            flow_a_x = np.angle(X) / np.pi * venc * a_mask
-            flow_v_x = np.angle(X) / np.pi * venc * v_mask
-            ax2.plot(np.sum(flow_a_x, axis=(-1,-2,-3)) / np.sum(a_mask[0]), label='flow_art_' + method_list[i], color=color_list[i])
+            flow_a_x = np.angle(X) * a_mask
+            flow_v_x = np.angle(X) * v_mask
+            ax2.plot(np.sum(flow_a_x, axis=(-1,-2,-3)) / np.sum(a_mask[0]), label=method_list[i], color=color_list[i])
             ax2.legend()
-            ax3.plot(np.sum(flow_v_x, axis=(-1,-2,-3)) / np.sum(v_mask[0]), label='flow_vein_' + method_list[i], color=color_list[i])
+            ax3.plot(np.sum(flow_v_x, axis=(-1,-2,-3)) / np.sum(v_mask[0]), label=method_list[i], color=color_list[i])
             ax3.legend()
         plt.tight_layout()
         plt.savefig(save_path + str(show_T) + '.png')
+        plt.close()
         writer.append_data(imageio.imread(save_path + str(show_T) + '.png'))
-        os.remove(save_path + str(show_T) + '.png')
+        # os.remove(save_path + str(show_T) + '.png')
 
 if __name__ == '__main__':
     data_path = '/nas-data/xcat2/res2/data_xcat_res2d5.npy'
     save_path = '/nas-data/xcat2/temp/'
-    test()
+    # test()
     draw()

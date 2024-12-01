@@ -383,3 +383,83 @@ def ReconHAAR(A, K, method, it, reg_list, L, regfactor=1, device='cuda', gt=None
                 metrics['ssim'].append(SSIM(torch.abs(X.unsqueeze(0).unsqueeze(0)) * regfactor, torch.abs(gt.unsqueeze(0).unsqueeze(0)), use_torch=True))
                 metrics['nrmse'].append(nRMSE(torch.abs(X) * regfactor, torch.abs(gt), use_torch=True).item())
     return X * regfactor, metrics
+
+
+def ReconHAAR_CORE(params):
+    y = params['K']
+    A = params['op']
+    oIter = params['oit']
+    iIter = params['iit']
+    gStp = params['gstp']
+    mu1 = params['mu1']
+    mu2 = params['mu2']
+    lam1 = params['lam1']
+    lam2 = params['lam2']
+    dev = params['device']
+    Nt, Nc, FE, PE, SPE = y.shape
+    print(dev, y.shape)
+    u = A.mtimes(y, 1)
+
+    v = torch.zeros_like(y).flatten()
+    d1 = torch.zeros((16, Nt, FE, PE, SPE)).to(torch.complex64).to(dev)
+    b1 = d1.clone()
+    d2 = v.clone()
+    b2 = v.clone()
+    for i in range(oIter):
+        # plt.imshow(abs(u[0, :, :, SPE // 2].cpu().numpy()), cmap='gray')
+        # plt.show()
+        for j in range(iIter):
+            # Gradient calculations
+            gradA = 2 * A.mtimes((A.mtimes(u, 0) + v.reshape(Nt, Nc, FE, PE, SPE) - y), 1)
+            gradW = mu1 * HAAR4D((HAAR4D(u, forward=True, device=dev) - d1.reshape(16, Nt, FE, PE, SPE) + b1.reshape(16,
+                                                                                                                     Nt,
+                                                                                                                     FE,
+                                                                                                                     PE,
+                                                                                                                     SPE)),
+                                 forward=False, device=dev)
+            u -= gStp * (gradA + gradW)
+
+        Au = A.mtimes(u, 0)
+        for j in range(iIter):
+            gradA = Au + v.reshape(Nt, Nc, FE, PE, SPE) - y
+            v = v.reshape(FE, -1)
+            gradW = mu2 * (v.flatten() - (d2 - b2) * (
+                        v / (torch.sqrt(torch.sum(torch.abs(v) ** 2, axis=0)) + 1e-6)).flatten())
+            v = v.flatten() - gStp * (gradA.flatten() + gradW)
+        del gradA
+        del gradW
+        # Update auxiliary variables
+        Wdecu = HAAR4D(u, forward=True, device=dev)
+
+        for ind in range(16):
+            d1[ind] = shrink1(Wdecu[ind] + b1[ind], lam1[ind] / mu1, 1)
+
+        b1 += (Wdecu - d1)
+        v = v.reshape(FE, -1)
+        b2 = b2.reshape(FE, -1)
+        d2 = shrink1(torch.sqrt(torch.sum(torch.abs(v) ** 2, axis=0)) + b2, lam2 / mu2, 1)
+        b2 += (torch.sqrt(torch.sum(torch.abs(v) ** 2, axis=0)) - d2)
+        b2 = b2.flatten()
+        d2 = d2.flatten()
+        v = v.flatten()
+        objW = 0
+        objA = 0.5 * torch.sum(torch.abs(Au + v.reshape(Nt, Nc, FE, PE, SPE) - y) ** 2)
+        for k in range(16):
+            objW += torch.sum(torch.abs(lam1[k] * Wdecu.view(16, -1)[k]))
+        objV = torch.sum(lam2 * torch.sqrt(torch.sum(torch.abs(v.view(FE, -1)) ** 2, dim=1)))
+        obj = objA + objW + objV
+
+        print(
+            f'CORe: Iter = {i} \tobjA= {objA.item():.2f}\tobjW= {objW.item():.2f}\tobjv= {objV.item():.2f}\ttotal_obj= {obj.item():.2f}\t')
+
+        del Au
+        del Wdecu
+    return u.cpu().numpy(), v
+
+
+def shrink1(s, alph, p, ep=1e-10):
+    t = torch.abs(s)
+    w = torch.max(t - alph * (t ** 2 + ep) ** (p / 2 - 0.5), torch.tensor(0.0, device=s.device)) * s 
+    t[t == 0] = 1
+    w = w / t
+    return w
